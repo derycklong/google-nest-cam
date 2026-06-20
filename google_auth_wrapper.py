@@ -3,6 +3,7 @@ import requests
 from nest_video_api import NestDoorbellDevice 
 
 from tools import logger
+from telegram_notify import notify_auth_failure
 import glocaltokens.client
 
 class GLocalAuthenticationTokensMultiService(glocaltokens.client.GLocalAuthenticationTokens):
@@ -26,6 +27,7 @@ class GLocalAuthenticationTokensMultiService(glocaltokens.client.GLocalAuthentic
             master_token = self.get_master_token()
             if master_token is None:
                 logger.debug("Unable to obtain master token.")
+                notify_auth_failure("Unable to obtain master token")
                 return None
             if self.username is None:
                 logger.error("Username is not set.")
@@ -41,6 +43,7 @@ class GLocalAuthenticationTokensMultiService(glocaltokens.client.GLocalAuthentic
             if "Auth" not in res:
                 logger.error("[!] Could not get access token.")
                 logger.debug("Request response: %s", res)
+                notify_auth_failure("Could not get access token — Auth key missing from OAuth response")
                 return None
             self.access_token = res["Auth"]
             self.access_token_date = datetime.datetime.now()
@@ -71,6 +74,7 @@ class GoogleConnection(object):
 
         access_token = self._google_auth.get_access_token(service=GoogleConnection.NEST_SCOPE)
         if not access_token:
+            notify_auth_failure("Couldn't get a Nest access token")
             raise Exception("Couldn't get a Nest access token")
         
         res = requests.get(
@@ -89,12 +93,13 @@ class GoogleConnection(object):
 
         if homegraph_response is None:
             logger.error("Failed to get homegraph response. Check your master token and username and whether you've imported your config file appropriately.")
+            notify_auth_failure("HomeGraph authentication failed — master token may be expired or invalid")
             raise Exception("Could not authenticate with Google. Your master token may be expired or invalid, or you might've not imported your config file appropriately.")
 
         # This one will list all your home devices
         # One of them would be your Nest Camera, let's find it
         return [
-            NestDoorbellDevice(self, device.device_info.agent_info.unique_id, device.device_name)
+            NestDoorbellDevice(self, device.device_info.agent_info.unique_id, device.device_name, device.hardware.model)
             for device in homegraph_response.home.devices
             if "action.devices.traits.CameraStream" in device.traits and "Nest" in device.hardware.model
         ]

@@ -8,6 +8,7 @@ __pycache__/
 
 # Actual files with sensitive information
 docker-compose.yaml
+nest.ini
 config/nest.ini
 
 # Distribution / packaging

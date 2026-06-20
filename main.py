@@ -20,7 +20,10 @@ if not os.path.exists(config_path):
         'timezone': '',
         'refresh_interval': '',
         'google_username': '',
-        'google_master_token': ''
+        'google_master_token': '',
+        'telegram_token': '',
+        'telegram_chat_id': '',
+        'telegram_message_interval': '60'
     }
     with open(config_path, 'w') as configfile:
         config.write(configfile)
@@ -40,7 +43,7 @@ def strip_inline_comment(value):
     return value.strip()
 
 # Keys that are optional and have defaults
-OPTIONAL_KEYS = {'fetch_range', 'max_age_days', 'max_size_mb', 'cleanup_enabled'}
+OPTIONAL_KEYS = {'fetch_range', 'max_age_days', 'max_size_mb', 'cleanup_enabled', 'telegram_token', 'telegram_chat_id', 'telegram_message_interval'}
 
 if 'nest' in config:
     for key, value in config['nest'].items():
@@ -62,6 +65,9 @@ FETCH_RANGE = int(os.environ.get("FETCH_RANGE", 240))
 CLEANUP_ENABLED = os.environ.get("CLEANUP_ENABLED", "false").lower() == "true"
 MAX_AGE_DAYS = int(os.environ.get("MAX_AGE_DAYS", 60))
 MAX_SIZE_MB = float(os.environ.get("MAX_SIZE_MB", 250000))
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+TELEGRAM_MESSAGE_INTERVAL = int(os.environ.get("TELEGRAM_MESSAGE_INTERVAL", "60"))
 
 
 assert GOOGLE_MASTER_TOKEN and GOOGLE_USERNAME
@@ -76,6 +82,9 @@ logger.info(f"  google_master_token: {GOOGLE_MASTER_TOKEN[:10]}...{GOOGLE_MASTER
 logger.info(f"  cleanup_enabled: {CLEANUP_ENABLED}")
 logger.info(f"  max_age_days: {MAX_AGE_DAYS} days")
 logger.info(f"  max_size_mb: {MAX_SIZE_MB} MB")
+logger.info(f"  telegram_token: {'configured' if TELEGRAM_TOKEN else 'not set'}")
+logger.info(f"  telegram_chat_id: {'configured' if TELEGRAM_CHAT_ID else 'not set'}")
+logger.info(f"  telegram_message_interval: {TELEGRAM_MESSAGE_INTERVAL} minutes")
 
 def main():
 
@@ -109,7 +118,8 @@ def main():
         sync_schedule,
         'interval',
         minutes=REFRESH_INTERVAL,
-        next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10)
+        next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10),
+        misfire_grace_time=300
     )
     if CLEANUP_ENABLED:
         scheduler.add_job(

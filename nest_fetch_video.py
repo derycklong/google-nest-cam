@@ -39,35 +39,35 @@ class DataEventsSync(object):
             duration_minutes=get_fetch_range()
         )
 
-        # Create the directory to store videos on a per day and per devices basis
         tz = get_timezone()
-        today = pytz.utc.localize(datetime.datetime.now()).astimezone(pytz.timezone(tz))
-        # Extract year, month, and day
-        year = str(today.year)
-        month = str(today.month).zfill(2)  # Ensure two digits for month
-        day = str(today.day).zfill(2)  # Ensure two digits for day
-        directory = os.path.join(BASE_DIRECTORY, nest_device.device_name, year, month, day)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
         logger.info(f"[{nest_device.device_id}] Received {len(all_recent_camera_events)} camera events")
 
         skipped = 0
         for camera_event_obj in all_recent_camera_events:
-            # logger.info(camera_event_obj.start_time)
-            file_name = nest_device.device_name + "_" + camera_event_obj.start_time.astimezone(pytz.timezone(tz)).strftime("%Y-%m-%d_%I-%M-%S%p") + ".mp4"
+            # Use the event's own timestamp for folder placement so dedup works
+            ts = camera_event_obj.start_time.astimezone(pytz.timezone(tz))
+            year = str(ts.year)
+            month = str(ts.month).zfill(2)
+            day = str(ts.day).zfill(2)
+            directory = os.path.join(BASE_DIRECTORY, nest_device.device_name, year, month, day)
+
+            file_name = ts.strftime("%Y-%m-%d_%H-%M-%S") + "_" + nest_device.device_type + ".mp4"
+            file_path = os.path.join(directory, file_name)
 
             # Check if file has been previously downloaded
-            if os.path.exists(os.path.join(directory, file_name)):
+            if os.path.exists(file_path):
                 logger.debug(f"CameraEvent ({camera_event_obj}) already sent, skipping..")
                 skipped += 1
                 continue
+
+            if not os.path.exists(directory):
+                os.makedirs(directory)
 
             logger.debug(f"Downloading camera event: {camera_event_obj}")
             video_data = nest_device.download_camera_event(camera_event_obj)
             video_io = BytesIO(video_data)
 
-            with open(os.path.join(directory, file_name), "wb") as file:
+            with open(file_path, "wb") as file:
                 file.write(video_io.getvalue())
 
             logger.info("Saved " + file_name + " successfully")
