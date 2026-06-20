@@ -26,12 +26,78 @@ Store your Nest event history to local storage and keep more than 60 days of foo
 
 ### 1. Obtain a Google Master Token
 
-Run the following command to get your master token:
-```bash
-docker run --rm -it breph/ha-google-home_get-token
-```
+A master token (`aas_et/...`) is required to authenticate against the Google/Nest APIs. It is long-lived and is generated from your Google account credentials.
 
-You can use an app password generated from [Google App Passwords](https://myaccount.google.com/apppasswords). Make sure you've generated it on the account that has your Nest cameras.
+The methods below (gpsoauth-java, glocaltokens, Docker containers) are worth trying first, but they often fail when 2FA is enabled. The following alternative flow — adapted from julianpitt/gpsoauth-gist — works with 2FA enabled.
+
+#### Token types
+- **OAuth token** — `oauth2_4/...`, very short lived. Needs an OAuth sign-in for an app.
+- **Master token** — `aas_et/...`, long lived. Needs Google username and password.
+- **Access token** — `ya29...`, lasts ~1 hour. Generated from the master token.
+
+#### Steps
+
+1. Create a new project directory and initialize a Python project. Using `uv`:
+   ```bash
+   uv init && uv venv && source .venv/bin/activate
+   ```
+
+2. Add the `gpsoauth` dependency:
+   ```bash
+   uv add gpsoauth
+   ```
+
+3. Save the following script as `get_master_token.py` and replace `{Your gmail address}` with your Google account email:
+   ```python
+   import json
+   import gpsoauth
+
+   email = '{Your gmail address}'  # your Google username
+   android_id = '0123456789abcdef'  # leave as-is
+   token = 'oauth2_4/XXXXXXXXXX'  # paste oauth_token here
+
+   master_response = gpsoauth.exchange_token(email, token, android_id)
+
+   print("Full response for debugging:")
+   print(json.dumps(master_response))
+
+   master_token = master_response['Token']
+   print(f"\nMaster token {master_token}")
+   ```
+
+4. Open [https://accounts.google.com/EmbeddedSetup](https://accounts.google.com/EmbeddedSetup) in your browser.
+
+5. Sign in to your Google account and complete any 2FA prompts.
+
+6. Click **I agree** when prompted. The page may appear to hang on a loading screen — that's fine, proceed to the next step.
+
+7. Copy the value of the `oauth_token` cookie from `accounts.google.com`. Two ways in Chrome (other browsers are similar):
+
+   **Method 1 — Site settings (lock icon):**
+   - Click the lock icon in the address bar.
+   - Open the **Cookies** section.
+   - Expand the `accounts.google.com` dropdown.
+   - Locate `oauth_token` and copy the value from the **Content** field.
+
+   **Method 2 — DevTools:**
+   - Open Developer Tools (`F12` or `Cmd/Ctrl + Shift + I`).
+   - Go to the **Application** tab.
+   - Under **Storage → Cookies**, click `https://accounts.google.com`.
+   - Find the `oauth_token` row and copy its **Cookie Value**.
+
+8. Paste the `oauth_token` value into the `token` variable in `get_master_token.py`.
+
+9. Run the script:
+   ```bash
+   uv run get_master_token.py
+   ```
+
+   The printed `aas_et/...` string is your master token. Set it as `google_master_token` in your `nest.ini`.
+
+#### Troubleshooting
+- Make sure you've replaced both the email and the token in the script.
+- The `oauth_token` is **single-use** and expires quickly — use it within a few minutes of obtaining it.
+- After extended use, Google may flag "suspicious activity" on the account generating the token. This is a known limitation of the approach.
 
 ### 2. Create the Configuration File
 
